@@ -1,5 +1,8 @@
 var builder = WebApplication.CreateBuilder(args);
 
+
+// Program.cs
+builder.Services.AddScoped<AuthService>();
 // Add services to the container.
 
 builder.Services.AddControllers();
@@ -12,7 +15,7 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
+      app.UseSwagger();
     app.UseSwaggerUI();
 }
 
