@@ -41,5 +41,10 @@ namespace Ankets.Entities
 
         [ForeignKey("RoleId")]
         public Role? Role { get; set; }
+
+        public string? PasswordResetToken { get; set; }
+
+        public DateTime? PasswordResetTokenExpiry { get; set; }
+
     }
 }

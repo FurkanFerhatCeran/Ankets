@@ -1,5 +1,6 @@
-// DTOs/RegisterDtos.cs
-namespace Ankets.DTOs
+using System.ComponentModel.DataAnnotations;
+
+namespace Ankets.DTOs.Requests
 {
     public class RegisterRequestDto
     {
@@ -13,20 +14,12 @@ namespace Ankets.DTOs
         public string Email { get; set; }
 
         [Required]
-        [MinLength(6)]
+        [MinLength(4)]
         [MaxLength(100)]
         public string Password { get; set; }
 
         [Required]
         [MaxLength(50)]
-        public string NameSurname { get; set; }
-    }
-
-    public class RegisterResponseDto
-    {
-        public int UserId { get; set; }
-        public string Username { get; set; }
-        public string Email { get; set; }
         public string NameSurname { get; set; }
     }
 }

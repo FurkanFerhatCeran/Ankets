@@ -1,6 +1,7 @@
 // Veritabaný ile Entity Framework Core köprüsü
 using Microsoft.EntityFrameworkCore;
 using Ankets.Entities;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Ankets.Data
 {
@@ -26,7 +27,21 @@ namespace Ankets.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-            // Ýliþkiler ve ek konfigürasyonlar burada yapýlabilir.
+            // Tablo adlarýný küçük harflerle eþleþtir
+            modelBuilder.Entity<User>().ToTable("users");
+            modelBuilder.Entity<Role>().ToTable("roles");
+            modelBuilder.Entity<UserSession>().ToTable("user_sessions");
+            modelBuilder.Entity<AuditLog>().ToTable("audit_logs");
+            modelBuilder.Entity<Survey>().ToTable("surveys");
+            modelBuilder.Entity<SurveyCategory>().ToTable("survey_categories");
+            modelBuilder.Entity<Question>().ToTable("questions");
+            modelBuilder.Entity<QuestionType>().ToTable("question_types");
+            modelBuilder.Entity<QuestionOption>().ToTable("question_options");
+            modelBuilder.Entity<SurveyResponse>().ToTable("survey_responses");
+            modelBuilder.Entity<QuestionAnswer>().ToTable("question_answers");
+            modelBuilder.Entity<SurveyShare>().ToTable("survey_shares");
+            modelBuilder.Entity<SurveyAnalytic>().ToTable("survey_analytics");
+            modelBuilder.Entity<AiAnalysis>().ToTable("ai_analysis");
         }
     }
 }
