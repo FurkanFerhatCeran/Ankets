@@ -7,7 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using System.Security.Cryptography;
+using BCrypt.Net;
 
 namespace Ankets.Services
 {
@@ -32,8 +32,8 @@ namespace Ankets.Services
             if (await _context.Users.AnyAsync(u => u.Email == registerDto.Email))
                 throw new ArgumentException("Bu e-posta adresi zaten kayýtlý.");
 
-            // Þifreyi hash'le
-            var passwordHash = HashPassword(registerDto.Password);
+            // Þifreyi BCrypt ile hash'le
+            var passwordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password);
 
             // Varsayýlan 'user' rolünü bulma
             var defaultRole = await _context.Roles.SingleOrDefaultAsync(r => r.RoleName == "user");
@@ -47,7 +47,7 @@ namespace Ankets.Services
             {
                 Username = registerDto.Username,
                 Email = registerDto.Email,
-                PasswordHash = passwordHash,
+                PasswordHash = passwordHash, // BCrypt ile hashlenmiþ þifre
                 NameSurname = registerDto.NameSurname,
                 RoleId = defaultRole.RoleId,
                 IsActive = true,
@@ -87,8 +87,11 @@ namespace Ankets.Services
                 .Include(u => u.Role)
                 .SingleOrDefaultAsync(u => u.Email == loginDto.Email);
 
-            if (user == null || !VerifyPassword(loginDto.Password, user.PasswordHash))
+            // Kullanýcý yoksa veya parola yanlýþsa UnauthorizedAccessException fýrlat
+            // BCrypt.Net.BCrypt.Verify metodu ile þifreyi kontrol et
+            if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
             {
+                // Güvenlik nedeniyle, hata mesajýný 'E-posta veya parola hatalý' olarak genel tut
                 throw new UnauthorizedAccessException("E-posta veya parola hatalý.");
             }
 
@@ -114,7 +117,6 @@ namespace Ankets.Services
             };
         }
 
-        // Bu metot, token'ýn içinde tutulacak bilgileri daha güvenli hale getirir.
         private string GenerateJwtToken(User user, string roleName)
         {
             var jwtSettings = _configuration.GetSection("Jwt");
@@ -140,7 +142,23 @@ namespace Ankets.Services
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        // Þifre sýfýrlama ve hash'leme metotlarý
+        // Diðer metotlar (Logout, SendPasswordResetEmail, ResetPassword) ayný kalabilir.
+        // BCrypt kullanýldýðý için HashPassword ve VerifyPassword metotlarý artýk kullanýlmayacak.
+        // Bu yüzden onlarý sildim. Þifre sýfýrlama token'ý için rastgele bir string oluþturma yöntemi kullanýlmaya devam edebilir.
+
+        private string GeneratePasswordResetToken()
+        {
+            // Parola sýfýrlama token'ý için BCrypt kullanmaya gerek yoktur.
+            // Rastgele bir string oluþturmak yeterlidir.
+            var tokenBytes = new byte[32];
+            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(tokenBytes);
+            }
+            return Convert.ToBase64String(tokenBytes);
+        }
+
+        // Parola sýfýrlama ve hash'leme metotlarý
         public async Task<bool> LogoutAsync(string? refreshToken, bool logoutFromAllDevices)
         {
             if (string.IsNullOrEmpty(refreshToken))
@@ -178,7 +196,7 @@ namespace Ankets.Services
                 return false;
             }
 
-            var newPasswordHash = HashPassword(newPassword);
+            var newPasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
             user.PasswordHash = newPasswordHash;
 
             user.PasswordResetToken = null;
@@ -186,27 +204,6 @@ namespace Ankets.Services
 
             await _context.SaveChangesAsync();
             return true;
-        }
-
-        private string GeneratePasswordResetToken()
-        {
-            using var rngCsp = new RNGCryptoServiceProvider();
-            var randomBytes = new byte[32];
-            rngCsp.GetBytes(randomBytes);
-            return Convert.ToBase64String(randomBytes);
-        }
-
-        private bool VerifyPassword(string enteredPassword, string storedHash)
-        {
-            var hashedEnteredPassword = HashPassword(enteredPassword);
-            return hashedEnteredPassword == storedHash;
-        }
-
-        private string HashPassword(string password)
-        {
-            using var sha256 = SHA256.Create();
-            var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-            return Convert.ToBase64String(hashedBytes);
         }
     }
 }

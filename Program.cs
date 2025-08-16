@@ -4,83 +4,148 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.OpenApi.Models;
+using Microsoft.Extensions.FileProviders; // Bu satýrý ekleyin
 
 var builder = WebApplication.CreateBuilder(args);
 
-// CORS configuration to allow requests from different origins.
+// Add services to the container
+builder.Services.AddControllers();
+
+// Configure CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AngularApp", builder =>
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        builder.WithOrigins("http://localhost:4200")
-               .AllowAnyHeader()
-               .AllowAnyMethod()
-               .AllowCredentials();
+        policy.WithOrigins("http://localhost:4200") // Frontend URL
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials() // ÖNEMLÝ: Credentials için gerekli
+              .SetPreflightMaxAge(TimeSpan.FromHours(1));
     });
 });
 
-// Adds controllers and API endpoints.
-builder.Services.AddControllers();
+// Configure Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = builder.Configuration["Swagger:Title"] ?? "Ankets API",
+        Version = builder.Configuration["Swagger:Version"] ?? "v1"
+    });
 
-// Database connection: Using Npgsql for PostgreSQL.
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "JWT Authorization header using the Bearer scheme."
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+// Database Configuration
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Adds and configures the JWT Authentication Service.
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+// JWT Authentication
+var jwtConfig = builder.Configuration.GetSection("Jwt");
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        // Validates the token's issuer.
-        ValidateIssuer = true,
-        // Validates the token's audience.
-        ValidateAudience = true,
-        // Validates the token's lifetime.
-        ValidateLifetime = true,
-        // Validates the token's signing key.
-        ValidateIssuerSigningKey = true,
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtConfig["Issuer"],
+            ValidAudience = jwtConfig["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtConfig["Key"] ?? throw new InvalidOperationException("JWT Key is missing"))),
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
-        // Values from the appsettings.json file.
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        // Converts the JWT key to a byte array in UTF-8 format.
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
-    };
-});
-
-// Adds service dependencies. AuthService can now be used throughout the application.
+// Custom Services
 builder.Services.AddScoped<AuthService>();
-
-// Adds Swagger/OpenAPI services for API documentation.
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
-// Configures the HTTP request pipeline.
+// Global Error Handling Middleware
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next(context);
+    }
+    catch (Exception ex)
+    {
+        context.Response.StatusCode = 500;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            StatusCode = 500,
+            Message = "Internal Server Error",
+            Detailed = ex.Message,
+            StackTrace = app.Environment.IsDevelopment() ? ex.StackTrace : null
+        });
 
-// Enables Swagger UI in all environments.
-app.UseSwagger();
-app.UseSwaggerUI();
+        Console.WriteLine($"HATA: {DateTime.UtcNow}");
+        Console.WriteLine($"Mesaj: {ex.Message}");
+        Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+    }
+});
 
-// Enables static files middleware.
+// Configure the HTTP request pipeline
+if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swagger:Enabled"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Ankets API V1"));
+}
+
+// OPTIONS Request Handler
+// Bu özel OPTIONS handler'ý artýk gerekli deðil, çünkü AddCors() ve UseCors()
+// metodlarý bunu otomatik olarak hallediyor. Silebilirsiniz.
+
 app.UseStaticFiles();
 
-// Enables CORS middleware.
-app.UseCors();
+// ÖNEMLÝ: app.UseRouting() ve app.UseCors() sýralamasýný düzeltin.
+app.UseRouting();
 
-// Adds authentication middleware. This must come before `app.UseAuthorization()`.
+// CORS'u yönlendirmeden (routing) sonra ve kimlik doðrulamadan (authentication) önce çaðýrýn.
+// Bu, hem preflight OPTIONS isteklerinin hem de gerçek API çaðrýlarýnýn doðru þekilde
+// CORS politikasý tarafýndan ele alýnmasýný saðlar.
+app.UseCors("AllowFrontend");
+
 app.UseAuthentication();
-// Adds authorization middleware.
 app.UseAuthorization();
 
-// Maps controller routes.
 app.MapControllers();
 
-// Runs the application.
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "Healthy",
+    timestamp = DateTime.UtcNow,
+    version = "1.0.0",
+    environment = app.Environment.EnvironmentName
+}));
+
 app.Run();
