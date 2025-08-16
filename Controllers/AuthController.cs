@@ -48,9 +48,9 @@ namespace Ankets.Controllers
                 var result = await _authService.LoginAsync(loginDto);
                 return Ok(result);
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException ex)
             {
-                return Unauthorized(new { Message = "Geçersiz kimlik bilgileri" });
+                return Unauthorized(new { Message = ex.Message });
             }
             catch (Exception)
             {

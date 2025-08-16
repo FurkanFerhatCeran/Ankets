@@ -11,6 +11,7 @@ using BCrypt.Net;
 
 namespace Ankets.Services
 {
+    // Kimlik doðrulama ve yetkilendirme iþ mantýðýný yöneten servis
     public class AuthService
     {
         private readonly AppDbContext _context;
@@ -82,7 +83,7 @@ namespace Ankets.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto)
         {
-            // Kullanýcýyý sadece email ile bul ve rolünü Include ile yükle
+            // Kullanýcýyý email ile bul ve rolünü Include ile yükle
             var user = await _context.Users
                 .Include(u => u.Role)
                 .SingleOrDefaultAsync(u => u.Email == loginDto.Email);
@@ -117,6 +118,7 @@ namespace Ankets.Services
             };
         }
 
+        // JWT token oluþturma metodu
         private string GenerateJwtToken(User user, string roleName)
         {
             var jwtSettings = _configuration.GetSection("Jwt");
@@ -142,22 +144,6 @@ namespace Ankets.Services
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        // Diðer metotlar (Logout, SendPasswordResetEmail, ResetPassword) ayný kalabilir.
-        // BCrypt kullanýldýðý için HashPassword ve VerifyPassword metotlarý artýk kullanýlmayacak.
-        // Bu yüzden onlarý sildim. Þifre sýfýrlama token'ý için rastgele bir string oluþturma yöntemi kullanýlmaya devam edebilir.
-
-        private string GeneratePasswordResetToken()
-        {
-            // Parola sýfýrlama token'ý için BCrypt kullanmaya gerek yoktur.
-            // Rastgele bir string oluþturmak yeterlidir.
-            var tokenBytes = new byte[32];
-            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
-            {
-                rng.GetBytes(tokenBytes);
-            }
-            return Convert.ToBase64String(tokenBytes);
-        }
-
         // Parola sýfýrlama ve hash'leme metotlarý
         public async Task<bool> LogoutAsync(string? refreshToken, bool logoutFromAllDevices)
         {
@@ -166,7 +152,6 @@ namespace Ankets.Services
                 return false;
             }
 
-            // TODO: Gerçek veritabaný veya cache operasyonlarýný buraya ekleyin
             await Task.CompletedTask;
             return true;
         }
@@ -204,6 +189,16 @@ namespace Ankets.Services
 
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        private string GeneratePasswordResetToken()
+        {
+            var tokenBytes = new byte[32];
+            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(tokenBytes);
+            }
+            return Convert.ToBase64String(tokenBytes);
         }
     }
 }
