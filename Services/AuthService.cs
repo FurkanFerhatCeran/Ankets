@@ -11,7 +11,7 @@ using BCrypt.Net;
 
 namespace Ankets.Services
 {
-    // Kimlik doðrulama ve yetkilendirme iþ mantýðýný yöneten servis
+    // Kimlik doï¿½rulama ve yetkilendirme iï¿½ mantï¿½ï¿½ï¿½nï¿½ yï¿½neten servis
     public class AuthService
     {
         private readonly AppDbContext _context;
@@ -25,30 +25,30 @@ namespace Ankets.Services
 
         public async Task<AuthResponseDto> RegisterAsync(RegisterRequestDto registerDto)
         {
-            // Kullanýcý adý kontrolü
+            // Kullanï¿½cï¿½ adï¿½ kontrolï¿½
             if (await _context.Users.AnyAsync(u => u.Username == registerDto.Username))
-                throw new ArgumentException("Bu kullanýcý adý zaten alýnmýþ.");
+                throw new ArgumentException("Bu kullanï¿½cï¿½ adï¿½ zaten alï¿½nmï¿½ï¿½.");
 
-            // Email kontrolü
+            // Email kontrolï¿½
             if (await _context.Users.AnyAsync(u => u.Email == registerDto.Email))
-                throw new ArgumentException("Bu e-posta adresi zaten kayýtlý.");
+                throw new ArgumentException("Bu e-posta adresi zaten kayï¿½tlï¿½.");
 
-            // Þifreyi BCrypt ile hash'le
+            // ï¿½ifreyi BCrypt ile hash'le
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password);
 
-            // Varsayýlan 'user' rolünü bulma
+            // Varsayï¿½lan 'user' rolï¿½nï¿½ bulma
             var defaultRole = await _context.Roles.SingleOrDefaultAsync(r => r.RoleName == "user");
             if (defaultRole == null)
             {
-                throw new InvalidOperationException("Varsayýlan 'user' rolü veritabanýnda bulunamadý. Lütfen 'roles' tablosunu kontrol edin.");
+                throw new InvalidOperationException("Varsayï¿½lan 'user' rolï¿½ veritabanï¿½nda bulunamadï¿½. Lï¿½tfen 'roles' tablosunu kontrol edin.");
             }
 
-            // Yeni kullanýcý oluþtur
+            // Yeni kullanï¿½cï¿½ oluï¿½tur
             var user = new User
             {
                 Username = registerDto.Username,
                 Email = registerDto.Email,
-                PasswordHash = passwordHash, // BCrypt ile hashlenmiþ þifre
+                PasswordHash = passwordHash, // BCrypt ile hashlenmiï¿½ ï¿½ifre
                 NameSurname = registerDto.NameSurname,
                 RoleId = defaultRole.RoleId,
                 IsActive = true,
@@ -59,12 +59,15 @@ namespace Ankets.Services
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            // JWT token oluþtur
+            // JWT token oluï¿½tur
             string generatedToken = GenerateJwtToken(user, defaultRole.RoleName);
 
             return new AuthResponseDto
             {
+                Success = true, // EKLENDÄ°
+                Message = "KayÄ±t baÅŸarÄ±lÄ±", // EKLENDÄ°  
                 Token = generatedToken,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(Convert.ToDouble(_configuration["Jwt:ExpiresInMinutes"])), // EKLENDÄ°
                 User = new UserResponseDto
                 {
                     UserId = user.UsersId,
@@ -83,25 +86,28 @@ namespace Ankets.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto loginDto)
         {
-            // Kullanýcýyý email ile bul ve rolünü Include ile yükle
+            // Kullanï¿½cï¿½yï¿½ email ile bul ve rolï¿½nï¿½ Include ile yï¿½kle
             var user = await _context.Users
                 .Include(u => u.Role)
                 .SingleOrDefaultAsync(u => u.Email == loginDto.Email);
 
-            // Kullanýcý yoksa veya parola yanlýþsa UnauthorizedAccessException fýrlat
-            // BCrypt.Net.BCrypt.Verify metodu ile þifreyi kontrol et
+            // Kullanï¿½cï¿½ yoksa veya parola yanlï¿½ï¿½sa UnauthorizedAccessException fï¿½rlat
+            // BCrypt.Net.BCrypt.Verify metodu ile ï¿½ifreyi kontrol et
             if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
             {
-                // Güvenlik nedeniyle, hata mesajýný 'E-posta veya parola hatalý' olarak genel tut
-                throw new UnauthorizedAccessException("E-posta veya parola hatalý.");
+                // Gï¿½venlik nedeniyle, hata mesajï¿½nï¿½ 'E-posta veya parola hatalï¿½' olarak genel tut
+                throw new UnauthorizedAccessException("E-posta veya parola hatalï¿½.");
             }
 
-            // JWT token oluþtur
+            // JWT token oluï¿½tur
             string generatedToken = GenerateJwtToken(user, user.Role?.RoleName);
 
             return new AuthResponseDto
             {
+                Success = true, // EKLENDÄ°
+                Message = "GiriÅŸ baÅŸarÄ±lÄ±", // EKLENDÄ°
                 Token = generatedToken,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(Convert.ToDouble(_configuration["Jwt:ExpiresInMinutes"])), // EKLENDÄ°
                 User = new UserResponseDto
                 {
                     UserId = user.UsersId,
@@ -118,7 +124,7 @@ namespace Ankets.Services
             };
         }
 
-        // JWT token oluþturma metodu
+        // JWT token oluï¿½turma metodu
         private string GenerateJwtToken(User user, string roleName)
         {
             var jwtSettings = _configuration.GetSection("Jwt");
@@ -144,7 +150,7 @@ namespace Ankets.Services
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        // Parola sýfýrlama ve hash'leme metotlarý
+        // Parola sï¿½fï¿½rlama ve hash'leme metotlarï¿½
         public async Task<bool> LogoutAsync(string? refreshToken, bool logoutFromAllDevices)
         {
             if (string.IsNullOrEmpty(refreshToken))

@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.OpenApi.Models;
-using Microsoft.Extensions.FileProviders; // Bu satýrý ekleyin
+using Microsoft.Extensions.FileProviders; // Bu satï¿½rï¿½ ekleyin
+using System.Security.Claims; // Bu satr ekleyin
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,7 +21,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins("http://localhost:4200") // Frontend URL
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials() // ÖNEMLÝ: Credentials için gerekli
+              .AllowCredentials() // ï¿½NEMLï¿½: Credentials iï¿½in gerekli
               .SetPreflightMaxAge(TimeSpan.FromHours(1));
     });
 });
@@ -38,11 +39,11 @@ builder.Services.AddSwaggerGen(c =>
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
-        Type = SecuritySchemeType.ApiKey,
+        Type = SecuritySchemeType.Http,  // ApiKey yerine Http
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "JWT Authorization header using the Bearer scheme."
+        Description = "Sadece JWT token'Ä±nÄ±zÄ± yapÄ±ÅŸtÄ±rÄ±n (Bearer yazmaya gerek yok)"
     });
 
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -82,10 +83,51 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 Encoding.UTF8.GetBytes(jwtConfig["Key"] ?? throw new InvalidOperationException("JWT Key is missing"))),
             ClockSkew = TimeSpan.Zero
         };
+        
+        // DEBUG: Authentication events eklendi
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Token;
+                
+                // EÄŸer Authorization header var ama Bearer ile baÅŸlamÄ±yorsa, token'Ä± direkt al
+                if (string.IsNullOrEmpty(token))
+                {
+                    var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+                    if (!string.IsNullOrEmpty(authHeader))
+                    {
+                        // Bearer prefix varsa kaldÄ±r, yoksa direkt kullan
+                        token = authHeader.StartsWith("Bearer ") ? authHeader.Substring(7) : authHeader;
+                        context.Token = token;
+                    }
+                }
+                
+                if (!string.IsNullOrEmpty(token))
+                {
+                    Console.WriteLine($"Token alÄ±ndÄ±: {token.Substring(0, Math.Min(20, token.Length))}...");
+                }
+                
+                return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = context =>
+            {
+                Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var userId = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                Console.WriteLine($"Token validated for user ID: {userId}");
+                return Task.CompletedTask;
+            }
+        };
     });
 
 // Custom Services
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<ISurveyService, SurveyService>();
 builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
@@ -122,17 +164,17 @@ if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swa
 }
 
 // OPTIONS Request Handler
-// Bu özel OPTIONS handler'ý artýk gerekli deðil, çünkü AddCors() ve UseCors()
-// metodlarý bunu otomatik olarak hallediyor. Silebilirsiniz.
+// Bu ï¿½zel OPTIONS handler'ï¿½ artï¿½k gerekli deï¿½il, ï¿½ï¿½nkï¿½ AddCors() ve UseCors()
+// metodlarï¿½ bunu otomatik olarak hallediyor. Silebilirsiniz.
 
 app.UseStaticFiles();
 
-// ÖNEMLÝ: app.UseRouting() ve app.UseCors() sýralamasýný düzeltin.
+// ï¿½NEMLï¿½: app.UseRouting() ve app.UseCors() sï¿½ralamasï¿½nï¿½ dï¿½zeltin.
 app.UseRouting();
 
-// CORS'u yönlendirmeden (routing) sonra ve kimlik doðrulamadan (authentication) önce çaðýrýn.
-// Bu, hem preflight OPTIONS isteklerinin hem de gerçek API çaðrýlarýnýn doðru þekilde
-// CORS politikasý tarafýndan ele alýnmasýný saðlar.
+// CORS'u yï¿½nlendirmeden (routing) sonra ve kimlik doï¿½rulamadan (authentication) ï¿½nce ï¿½aï¿½ï¿½rï¿½n.
+// Bu, hem preflight OPTIONS isteklerinin hem de gerï¿½ek API ï¿½aï¿½rï¿½larï¿½nï¿½n doï¿½ru ï¿½ekilde
+// CORS politikasï¿½ tarafï¿½ndan ele alï¿½nmasï¿½nï¿½ saï¿½lar.
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();

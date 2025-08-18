@@ -2,6 +2,13 @@ using Ankets.DTOs.Requests;
 using Ankets.DTOs.Responses;
 using Ankets.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
+using System;
+using System.Linq;
 
 namespace Ankets.Controllers
 {
@@ -33,7 +40,7 @@ namespace Ankets.Controllers
             }
             catch (Exception)
             {
-                return StatusCode(500, new { Message = "Kayýt sýrasýnda bir hata oluþtu" });
+                return StatusCode(500, new { Message = "Kayï¿½t sï¿½rasï¿½nda bir hata oluï¿½tu" });
             }
         }
 
@@ -54,7 +61,7 @@ namespace Ankets.Controllers
             }
             catch (Exception)
             {
-                return StatusCode(500, new { Message = "Giriþ sýrasýnda bir hata oluþtu" });
+                return StatusCode(500, new { Message = "Giriï¿½ sï¿½rasï¿½nda bir hata oluï¿½tu" });
             }
         }
 
@@ -67,11 +74,11 @@ namespace Ankets.Controllers
             try
             {
                 await _authService.SendPasswordResetEmailAsync(dto.Email);
-                return Ok(new { Message = "Þifre sýfýrlama baðlantýsý gönderildi" });
+                return Ok(new { Message = "ï¿½ifre sï¿½fï¿½rlama baï¿½lantï¿½sï¿½ gï¿½nderildi" });
             }
             catch (Exception)
             {
-                return StatusCode(500, new { Message = "Bir hata oluþtu" });
+                return StatusCode(500, new { Message = "Bir hata oluï¿½tu" });
             }
         }
 
@@ -88,8 +95,8 @@ namespace Ankets.Controllers
             );
 
             return result ?
-                Ok(new { Message = "Þifre baþarýyla sýfýrlandý" }) :
-                BadRequest(new { Message = "Geçersiz token veya süresi dolmuþ" });
+                Ok(new { Message = "ï¿½ifre baï¿½arï¿½yla sï¿½fï¿½rlandï¿½" }) :
+                BadRequest(new { Message = "Geï¿½ersiz token veya sï¿½resi dolmuï¿½" });
         }
 
         [HttpPost("logout")]
@@ -101,8 +108,24 @@ namespace Ankets.Controllers
             var result = await _authService.LogoutAsync(dto.RefreshToken, dto.LogoutFromAllDevices);
 
             return result ?
-                Ok(new LogoutResponseDto { Success = true, Message = "Baþarýyla çýkýþ yapýldý" }) :
-                BadRequest(new LogoutResponseDto { Success = false, Message = "Çýkýþ baþarýsýz" });
+                Ok(new LogoutResponseDto { Success = true, Message = "Baï¿½arï¿½yla ï¿½ï¿½kï¿½ï¿½ yapï¿½ldï¿½" }) :
+                BadRequest(new LogoutResponseDto { Success = false, Message = "ï¿½ï¿½kï¿½ï¿½ baï¿½arï¿½sï¿½z" });
+        }
+
+        [HttpGet("test")]
+        [Authorize]
+        public IActionResult TestAuth()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var email = User.FindFirst(ClaimTypes.Email)?.Value;
+            var role = User.FindFirst(ClaimTypes.Role)?.Value;
+            
+            return Ok(new {
+                UserId = userId,
+                Email = email,
+                Role = role,
+                AllClaims = User.Claims.Select(c => new { c.Type, c.Value }).ToList()
+            });
         }
     }
 }
